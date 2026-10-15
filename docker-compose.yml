@@ -15,5 +15,10 @@ services:
       timeout: 3s
       retries: 10
 
+  ministack:
+    image: ministackorg/ministack:1.5.27
+    ports:
+      - '4566:4566'
+
 volumes:
   postgres-data:
