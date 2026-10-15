@@ -17,8 +17,13 @@ services:
 
   ministack:
     image: ministackorg/ministack:1.5.27
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
     ports:
       - '4566:4566'
+    volumes:
+      - ./docker/ministack/init:/etc/localstack/init/ready.d
 
 volumes:
   postgres-data:
