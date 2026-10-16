@@ -1,3 +1,7 @@
+import { InvalidMoneyAmountError } from './errors';
+
+const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
+
 export interface MoneyProps {
   amount: string;
   currency: string;
@@ -19,6 +23,10 @@ export class Money {
 }
 
 function toCents(amount: string): bigint {
+  if (!AMOUNT_PATTERN.test(amount)) {
+    throw new InvalidMoneyAmountError(`Invalid money amount: "${amount}"`);
+  }
+
   const [wholePart, fractionPart = ''] = amount.split('.');
   const fraction = fractionPart.padEnd(2, '0');
 

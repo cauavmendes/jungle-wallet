@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { Money } from './money';
+import { InvalidMoneyAmountError } from './errors';
 
 describe('Money', () => {
   describe('from', () => {
@@ -26,5 +27,16 @@ describe('Money', () => {
 
       expect(money.toJSON()).toEqual({ amount: '25.50', currency: 'BRL' });
     });
+  });
+
+  describe('invalid amounts', () => {
+    it.each(['NaN', 'Infinity', '1e3', '', '-10.00', '25.001', 'abc', '10,00'])(
+      'rejects %p',
+      (amount) => {
+        expect(() => Money.from({ amount, currency: 'BRL' })).toThrow(
+          InvalidMoneyAmountError,
+        );
+      },
+    );
   });
 });
