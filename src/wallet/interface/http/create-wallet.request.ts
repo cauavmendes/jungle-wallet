@@ -1,9 +1,7 @@
 import { Money } from '../../../shared/domain/money';
 import { InvalidRequestError } from '../../../shared/interface/http/invalid-request.error';
+import { isRecord, isUuid } from '../../../shared/interface/http/validation';
 import type { CreateWalletCommand } from '../../application/create-wallet.use-case';
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function parseCreateWalletRequest(body: unknown): CreateWalletCommand {
   if (!isRecord(body)) {
@@ -12,7 +10,7 @@ export function parseCreateWalletRequest(body: unknown): CreateWalletCommand {
 
   const { playerId, initialBalance } = body;
 
-  if (typeof playerId !== 'string' || !UUID_PATTERN.test(playerId)) {
+  if (!isUuid(playerId)) {
     throw new InvalidRequestError('playerId must be a UUID');
   }
 
@@ -33,8 +31,4 @@ export function parseCreateWalletRequest(body: unknown): CreateWalletCommand {
       currency: initialBalance.currency,
     }),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
