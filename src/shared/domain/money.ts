@@ -50,6 +50,28 @@ export class Money {
     return new Money(-this.cents, this.currency);
   }
 
+  isZero(): boolean {
+    return this.cents === 0n;
+  }
+
+  isPositive(): boolean {
+    return this.cents > 0n;
+  }
+
+  isNegative(): boolean {
+    return this.cents < 0n;
+  }
+
+  isLessThan(other: Money): boolean {
+    this.assertSameCurrency(other);
+
+    return this.cents < other.cents;
+  }
+
+  equals(other: Money): boolean {
+    return this.currency === other.currency && this.cents === other.cents;
+  }
+
   private assertSameCurrency(other: Money): void {
     if (this.currency !== other.currency) {
       throw new CurrencyMismatchError(

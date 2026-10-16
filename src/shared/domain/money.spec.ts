@@ -159,4 +159,44 @@ describe('Money', () => {
       });
     });
   });
+
+  describe('comparisons', () => {
+    const zero = Money.zero('BRL');
+    const ten = Money.from({ amount: '10.00', currency: 'BRL' });
+    const negative = zero.subtract(ten);
+
+    it('detects zero', () => {
+      expect(zero.isZero()).toBe(true);
+      expect(ten.isZero()).toBe(false);
+    });
+
+    it('detects positive amounts', () => {
+      expect(ten.isPositive()).toBe(true);
+      expect(zero.isPositive()).toBe(false);
+    });
+
+    it('detects negative amounts', () => {
+      expect(negative.isNegative()).toBe(true);
+      expect(zero.isNegative()).toBe(false);
+    });
+
+    it('compares amounts with isLessThan', () => {
+      expect(zero.isLessThan(ten)).toBe(true);
+      expect(ten.isLessThan(zero)).toBe(false);
+    });
+
+    it('rejects isLessThan between different currencies', () => {
+      const usd = Money.from({ amount: '10.00', currency: 'USD' });
+
+      expect(() => ten.isLessThan(usd)).toThrow(CurrencyMismatchError);
+    });
+
+    it('compares value and currency with equals', () => {
+      const anotherTen = Money.from({ amount: '10.00', currency: 'BRL' });
+      const tenDollars = Money.from({ amount: '10.00', currency: 'USD' });
+
+      expect(ten.equals(anotherTen)).toBe(true);
+      expect(ten.equals(tenDollars)).toBe(false);
+    });
+  });
 });
