@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { Money } from './money';
-import { InvalidMoneyAmountError } from './errors';
+import { InvalidCurrencyError, InvalidMoneyAmountError } from './errors';
 
 describe('Money', () => {
   describe('from', () => {
@@ -38,5 +38,13 @@ describe('Money', () => {
         );
       },
     );
+  });
+
+  describe('invalid currencies', () => {
+    it.each(['real', 'brl', 'BR', 'BRLX', ''])('rejects %p', (currency) => {
+      expect(() => Money.from({ amount: '10.00', currency })).toThrow(
+        InvalidCurrencyError,
+      );
+    });
   });
 });

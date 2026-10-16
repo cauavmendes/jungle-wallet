@@ -1,6 +1,7 @@
-import { InvalidMoneyAmountError } from './errors';
+import { InvalidCurrencyError, InvalidMoneyAmountError } from './errors';
 
 const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
+const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
 export interface MoneyProps {
   amount: string;
@@ -14,6 +15,10 @@ export class Money {
   ) {}
 
   static from(props: MoneyProps): Money {
+    if (!CURRENCY_PATTERN.test(props.currency)) {
+      throw new InvalidCurrencyError(`Invalid currency: "${props.currency}"`);
+    }
+
     return new Money(toCents(props.amount), props.currency);
   }
 

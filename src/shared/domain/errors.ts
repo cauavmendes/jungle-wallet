@@ -10,3 +10,7 @@ export abstract class DomainError extends Error {
 export class InvalidMoneyAmountError extends DomainError {
   readonly code = 'INVALID_MONEY_AMOUNT';
 }
+
+export class InvalidCurrencyError extends DomainError {
+  readonly code = 'INVALID_CURRENCY';
+}
