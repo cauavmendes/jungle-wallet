@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS outbox_messages CASCADE;
+DROP TABLE IF EXISTS inbox_messages CASCADE;
 DROP TABLE IF EXISTS wallet_ledger_entries CASCADE;
 DROP TABLE IF EXISTS wager_transactions CASCADE;
 DROP TABLE IF EXISTS wallets CASCADE;
@@ -82,3 +84,36 @@ CREATE TRIGGER ledger_no_update_delete
 CREATE TRIGGER ledger_no_truncate
   BEFORE TRUNCATE ON wallet_ledger_entries
   FOR EACH STATEMENT EXECUTE FUNCTION prevent_ledger_mutation();
+
+CREATE UNIQUE INDEX wager_tx_single_reversal_idx
+  ON wager_transactions (reference_transaction_id, kind)
+  WHERE reference_transaction_id IS NOT NULL AND status = 'PROCESSED';
+
+CREATE INDEX wager_tx_pending_reference_idx
+  ON wager_transactions (created_at)
+  WHERE status = 'PENDING_REFERENCE';
+
+CREATE TABLE inbox_messages (
+  consumer_name text        NOT NULL,
+  message_id    text        NOT NULL,
+  payload_hash  char(64)    NOT NULL,
+  received_at   timestamptz NOT NULL DEFAULT now(),
+  processed_at  timestamptz,
+
+  PRIMARY KEY (consumer_name, message_id)
+);
+
+CREATE TABLE outbox_messages (
+  id              uuid        PRIMARY KEY,
+  aggregate_id    uuid        NOT NULL,
+  event_type      text        NOT NULL,
+  payload         jsonb       NOT NULL,
+  occurred_at     timestamptz NOT NULL,
+  attempts        integer     NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  published_at    timestamptz
+);
+
+CREATE INDEX outbox_pending_idx
+  ON outbox_messages (next_attempt_at)
+  WHERE published_at IS NULL;
