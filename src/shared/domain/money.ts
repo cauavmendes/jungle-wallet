@@ -36,6 +36,12 @@ export class Money {
     return new Money(this.cents + other.cents, this.currency);
   }
 
+  subtract(other: Money): Money {
+    this.assertSameCurrency(other);
+
+    return new Money(this.cents - other.cents, this.currency);
+  }
+
   private assertSameCurrency(other: Money): void {
     if (this.currency !== other.currency) {
       throw new CurrencyMismatchError(
@@ -57,8 +63,10 @@ function toCents(amount: string): bigint {
 }
 
 function formatCents(cents: bigint): string {
-  const whole = cents / 100n;
-  const fraction = (cents % 100n).toString().padStart(2, '0');
+  const sign = cents < 0n ? '-' : '';
+  const absolute = cents < 0n ? -cents : cents;
+  const whole = absolute / 100n;
+  const fraction = (absolute % 100n).toString().padStart(2, '0');
 
-  return `${whole}.${fraction}`;
+  return `${sign}${whole}.${fraction}`;
 }

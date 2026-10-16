@@ -76,4 +76,42 @@ describe('Money', () => {
       expect(() => brl.add(usd)).toThrow(CurrencyMismatchError);
     });
   });
+
+  describe('subtract', () => {
+    it('subtracts two amounts of the same currency', () => {
+      const a = Money.from({ amount: '10.00', currency: 'BRL' });
+      const b = Money.from({ amount: '5.50', currency: 'BRL' });
+
+      expect(a.subtract(b).toJSON()).toEqual({
+        amount: '4.50',
+        currency: 'BRL',
+      });
+    });
+
+    it('does not change the original instance', () => {
+      const a = Money.from({ amount: '10.00', currency: 'BRL' });
+      const b = Money.from({ amount: '5.50', currency: 'BRL' });
+
+      a.subtract(b);
+
+      expect(a.toJSON()).toEqual({ amount: '10.00', currency: 'BRL' });
+    });
+
+    it('rejects amounts of different currencies', () => {
+      const brl = Money.from({ amount: '10.00', currency: 'BRL' });
+      const usd = Money.from({ amount: '5.00', currency: 'USD' });
+
+      expect(() => brl.subtract(usd)).toThrow(CurrencyMismatchError);
+    });
+
+    it('allows a negative result', () => {
+      const a = Money.from({ amount: '5.00', currency: 'BRL' });
+      const b = Money.from({ amount: '10.50', currency: 'BRL' });
+
+      expect(a.subtract(b).toJSON()).toEqual({
+        amount: '-5.50',
+        currency: 'BRL',
+      });
+    });
+  });
 });
