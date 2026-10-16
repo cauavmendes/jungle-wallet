@@ -2,20 +2,10 @@ import { createHash } from 'node:crypto';
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
-import { Money } from '../../shared/domain/money';
 import type { WalletRepository } from '../application/wallet.repository';
-import { type OpenedWallet, Wallet } from '../domain/wallet';
+import type { OpenedWallet, Wallet } from '../domain/wallet';
 import { WalletAlreadyExistsError } from '../domain/wallet.errors';
-
-interface WalletRow {
-  id: string;
-  player_id: string;
-  currency: string;
-  balance_cents: string;
-  version: number;
-  created_at: Date;
-  updated_at: Date;
-}
+import { toWallet, WALLET_COLUMNS, type WalletRow } from './wallet.row';
 
 @Injectable()
 export class SqlWalletRepository implements WalletRepository {
@@ -44,9 +34,10 @@ export class SqlWalletRepository implements WalletRepository {
 
         await em.execute(
           `INSERT INTO wager_transactions (id, provider_id, external_transaction_id, idempotency_key,
-             payload_hash, wallet_id, player_id, currency, kind, amount_cents, status, created_at, processed_at)
+             payload_hash, wallet_id, player_id, currency, kind, amount_cents, status, created_at,
+             processed_at, balance_after_cents)
            VALUES (:id, 'internal', :id, :idempotencyKey, :payloadHash, :walletId, :playerId, :currency,
-             'OPENING', :amountCents, 'PROCESSED', :at, :at)`,
+             'OPENING', :amountCents, 'PROCESSED', :at, :at, :amountCents)`,
           {
             id: openingEntry.transactionId,
             idempotencyKey: `internal:opening:${wallet.id}`,
@@ -91,27 +82,13 @@ export class SqlWalletRepository implements WalletRepository {
 
   async findById(id: string): Promise<Wallet | null> {
     const rows = (await this.em.execute(
-      `SELECT id, player_id, currency, balance_cents, version, created_at, updated_at
-         FROM wallets
-        WHERE id = :id`,
+      `SELECT ${WALLET_COLUMNS} FROM wallets WHERE id = :id`,
       { id },
     )) as WalletRow[];
 
     const row = rows[0];
 
-    if (!row) {
-      return null;
-    }
-
-    return Wallet.rehydrate({
-      id: row.id,
-      playerId: row.player_id,
-      currency: row.currency,
-      balance: Money.fromCents(BigInt(row.balance_cents), row.currency),
-      version: row.version,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    });
+    return row ? toWallet(row) : null;
   }
 }
 
