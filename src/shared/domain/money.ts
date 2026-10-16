@@ -34,6 +34,10 @@ export class Money {
     return { amount: formatCents(this.cents), currency: this.currency };
   }
 
+  toString(): string {
+    return `${formatCents(this.cents)} ${this.currency}`;
+  }
+
   add(other: Money): Money {
     this.assertSameCurrency(other);
 

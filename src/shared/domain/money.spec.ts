@@ -199,4 +199,12 @@ describe('Money', () => {
       expect(ten.equals(tenDollars)).toBe(false);
     });
   });
+
+  describe('toString', () => {
+    it('formats amount and currency for humans', () => {
+      const money = Money.from({ amount: '25.5', currency: 'BRL' });
+
+      expect(money.toString()).toBe('25.50 BRL');
+    });
+  });
 });
