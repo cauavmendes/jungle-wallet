@@ -113,5 +113,15 @@ describe('Money', () => {
         currency: 'BRL',
       });
     });
+
+    it('keeps the sign when the whole part is zero', () => {
+      const a = Money.from({ amount: '0.00', currency: 'BRL' });
+      const b = Money.from({ amount: '0.50', currency: 'BRL' });
+
+      expect(a.subtract(b).toJSON()).toEqual({
+        amount: '-0.50',
+        currency: 'BRL',
+      });
+    });
   });
 });
