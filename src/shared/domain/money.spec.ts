@@ -207,4 +207,22 @@ describe('Money', () => {
       expect(money.toString()).toBe('25.50 BRL');
     });
   });
+
+  describe('cents conversion', () => {
+    it('creates money from an integer amount of cents', () => {
+      const money = Money.fromCents(2550n, 'BRL');
+
+      expect(money.toJSON()).toEqual({ amount: '25.50', currency: 'BRL' });
+    });
+
+    it('exposes the amount in cents', () => {
+      const money = Money.from({ amount: '25.50', currency: 'BRL' });
+
+      expect(money.toCents()).toBe(2550n);
+    });
+
+    it('rejects an invalid currency when created from cents', () => {
+      expect(() => Money.fromCents(100n, 'real')).toThrow(InvalidCurrencyError);
+    });
+  });
 });

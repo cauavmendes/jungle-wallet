@@ -19,15 +19,19 @@ export class Money {
   ) {}
 
   static from(props: MoneyProps): Money {
-    if (!CURRENCY_PATTERN.test(props.currency)) {
-      throw new InvalidCurrencyError(`Invalid currency: "${props.currency}"`);
-    }
-
-    return new Money(toCents(props.amount), props.currency);
+    return Money.fromCents(parseAmount(props.amount), props.currency);
   }
 
   static zero(currency: string): Money {
-    return Money.from({ amount: '0.00', currency });
+    return Money.fromCents(0n, currency);
+  }
+
+  static fromCents(cents: bigint, currency: string): Money {
+    if (!CURRENCY_PATTERN.test(currency)) {
+      throw new InvalidCurrencyError(`Invalid currency: "${currency}"`);
+    }
+
+    return new Money(cents, currency);
   }
 
   toJSON(): MoneyProps {
@@ -36,6 +40,10 @@ export class Money {
 
   toString(): string {
     return `${formatCents(this.cents)} ${this.currency}`;
+  }
+
+  toCents(): bigint {
+    return this.cents;
   }
 
   add(other: Money): Money {
@@ -85,7 +93,7 @@ export class Money {
   }
 }
 
-function toCents(amount: string): bigint {
+function parseAmount(amount: string): bigint {
   if (!AMOUNT_PATTERN.test(amount)) {
     throw new InvalidMoneyAmountError(`Invalid money amount: "${amount}"`);
   }
