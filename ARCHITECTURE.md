@@ -9,7 +9,7 @@ Este documento registra as decisões técnicas, os trade-offs e as limitações 
 - **CommonJS em vez de ESM**: maior maturidade do ecossistema NestJS/MikroORM e menos risco de configuração no prazo do desafio.
 - **MiniStack em vez de LocalStack**: desde março de 2026 o LocalStack exige token de autenticação, o que impediria o avaliador de subir o ambiente sem criar conta. O MiniStack é MIT, não exige conta e é compatível na porta 4566.
 - **Versões de imagem fixas** (`postgres:17-alpine`, `ministackorg/ministack:1.5.27`), para que o ambiente seja reproduzível.
-- As filas SQS são criadas por um script na fase _ready_ do MiniStack, depois que o servidor já está ouvindo. Na fase _boot_ o script rodaria antes da porta abrir.
+- As filas SQS são criadas por um script na fase _ready_ do MiniStack, depois que o servidor já está ouvindo. Na fase _boot_ o script rodaria antes da porta abrir. A DLQ é criada antes da fila principal, porque a política de redirecionamento (`RedrivePolicy`, com `maxReceiveCount` de 5) precisa do ARN dela.
 
 ## Dinheiro (`Money`)
 
@@ -18,7 +18,7 @@ Este documento registra as decisões técnicas, os trade-offs e as limitações 
 - **`"25"` é aceito e normalizado para `"25.00"`**: o desafio proíbe mais de 2 casas, mas não menos.
 - **`Money` pode ser negativo internamente** (necessário para a diferença da reconciliação e para o `negate`). Negativos são rejeitados no contrato de entrada (`Money.from`) e o saldo é protegido pela `Wallet` e pelo banco.
 - **Moedas diferentes**: operações e `isLessThan` lançam `CurrencyMismatchError`; `equals` devolve `false`.
-- Construtor privado: a única entrada é `Money.from`, então não existe `Money` inválido.
+- Construtor privado: toda criação passa por `Money.fromCents`, então não existe `Money` inválido. `Money.from` interpreta o texto da API; `Money.fromCents` reconstrói valores vindos do banco.
 
 ## Garantias no banco de dados
 
@@ -36,6 +36,24 @@ Este documento registra as decisões técnicas, os trade-offs e as limitações 
 | Lançamento com aritmética correta                | `CHECK (balance_before ± amount = balance_after)`             |
 | Ledger imutável                                  | triggers que recusam `UPDATE`, `DELETE` e `TRUNCATE`          |
 | Deduplicação de mensagens                        | chave primária `(consumer_name, message_id)` no inbox         |
+
+## Persistência
+
+- **MikroORM 7** para conexão, transações (`em.transactional`) e migrations versionadas e reversíveis (`db:migrate` e `db:rollback`).
+- **SQL explícito nas operações críticas**, com parâmetros nomeados. Para correção financeira, cada comando enviado ao banco fica visível e revisável, em vez de gerado pelo ORM.
+- **Migrations em SQL escrito à mão** e listadas explicitamente na configuração (`migrationsList`), com comportamento previsível no Bun e no build. O snapshot de schema está desativado, porque só serve para gerar migrations a partir de entidades.
+- **Valores em centavos trafegam como texto** entre a aplicação e o banco: nenhum valor monetário passa por `number`.
+
+## API HTTP
+
+| Situação                              | Status | Exemplo de `code`                                             |
+| ------------------------------------- | ------ | ------------------------------------------------------------- |
+| Entrada com formato ou valor inválido | 400    | `INVALID_REQUEST`, `INVALID_MONEY_AMOUNT`, `INVALID_CURRENCY` |
+| Recurso não encontrado                | 404    | `WALLET_NOT_FOUND`                                            |
+| Conflito com o estado existente       | 409    | `WALLET_ALREADY_EXISTS`                                       |
+| Regra de negócio recusada             | 422    | `INSUFFICIENT_FUNDS`                                          |
+
+Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `code` é estável e legível por máquina, para o provedor decidir se reenvia, corrige ou desiste sem interpretar texto.
 
 ## Concorrência
 
