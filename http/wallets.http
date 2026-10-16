@@ -1,0 +1,56 @@
+@baseUrl = http://localhost:3000
+@playerId = 0192f28f-5dc0-7d58-bdb2-814ad6a0f4a1
+
+###
+POST {{baseUrl}}/wallets
+Content-Type: application/json
+
+{
+  "playerId": "{{playerId}}",
+  "initialBalance": { "amount": "1000.00", "currency": "BRL" }
+}
+
+###
+POST {{baseUrl}}/wallets
+Content-Type: application/json
+
+{
+  "playerId": "{{playerId}}",
+  "initialBalance": { "amount": "1000.00", "currency": "BRL" }
+}
+
+###
+POST {{baseUrl}}/wallets
+Content-Type: application/json
+
+{
+  "playerId": "{{$guid}}",
+  "initialBalance": { "amount": 1000, "currency": "BRL" }
+}
+
+###
+POST {{baseUrl}}/wallets
+Content-Type: application/json
+
+{
+  "playerId": "{{$guid}}",
+  "initialBalance": { "amount": "1e3", "currency": "BRL" }
+}
+
+###
+POST {{baseUrl}}/wallets
+Content-Type: application/json
+
+{
+  "playerId": "{{$guid}}",
+  "initialBalance": { "amount": "0.00", "currency": "BRL" }
+}
+
+###
+GET {{baseUrl}}/wallets/874842f6-0da5-4335-a1b7-22a910ed0b0f
+
+###
+GET {{baseUrl}}/wallets/00000000-0000-0000-0000-000000000000
+
+###
+GET {{baseUrl}}/wallets/abc

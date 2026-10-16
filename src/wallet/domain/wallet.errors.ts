@@ -11,3 +11,11 @@ export class InvalidLedgerAmountError extends DomainError {
 export class UnbalancedLedgerEntryError extends DomainError {
   readonly code = 'UNBALANCED_LEDGER_ENTRY';
 }
+
+export class WalletAlreadyExistsError extends DomainError {
+  readonly code = 'WALLET_ALREADY_EXISTS';
+}
+
+export class WalletNotFoundError extends DomainError {
+  readonly code = 'WALLET_NOT_FOUND';
+}
