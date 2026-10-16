@@ -26,6 +26,10 @@ export class Money {
     return new Money(toCents(props.amount), props.currency);
   }
 
+  static zero(currency: string): Money {
+    return Money.from({ amount: '0.00', currency });
+  }
+
   toJSON(): MoneyProps {
     return { amount: formatCents(this.cents), currency: this.currency };
   }
@@ -40,6 +44,10 @@ export class Money {
     this.assertSameCurrency(other);
 
     return new Money(this.cents - other.cents, this.currency);
+  }
+
+  negate(): Money {
+    return new Money(-this.cents, this.currency);
   }
 
   private assertSameCurrency(other: Money): void {

@@ -124,4 +124,39 @@ describe('Money', () => {
       });
     });
   });
+
+  describe('zero', () => {
+    it('creates a zero amount in the given currency', () => {
+      expect(Money.zero('BRL').toJSON()).toEqual({
+        amount: '0.00',
+        currency: 'BRL',
+      });
+    });
+
+    it('rejects an invalid currency', () => {
+      expect(() => Money.zero('real')).toThrow(InvalidCurrencyError);
+    });
+  });
+
+  describe('negate', () => {
+    it('inverts a positive amount', () => {
+      const money = Money.from({ amount: '10.00', currency: 'BRL' });
+
+      expect(money.negate().toJSON()).toEqual({
+        amount: '-10.00',
+        currency: 'BRL',
+      });
+    });
+
+    it('inverts a negative amount', () => {
+      const a = Money.from({ amount: '5.00', currency: 'BRL' });
+      const b = Money.from({ amount: '10.50', currency: 'BRL' });
+      const negative = a.subtract(b);
+
+      expect(negative.negate().toJSON()).toEqual({
+        amount: '5.50',
+        currency: 'BRL',
+      });
+    });
+  });
 });
