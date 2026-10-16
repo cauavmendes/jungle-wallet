@@ -14,10 +14,11 @@
     "start:dev": "bun --watch src/main.ts",
     "start:debug": "bun --inspect --watch src/main.ts",
     "start:prod": "bun src/main.ts",
-    "lint": "oxlint --type-aware src/",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
-    "test:cov": "bun test --coverage"
+    "lint": "oxlint --type-aware src/ test/",
+    "test": "bun test src",
+    "test:integration": "bun test test/integration",
+    "test:watch": "bun test src --watch",
+    "test:cov": "bun test src --coverage"
   },
   "dependencies": {
     "@mikro-orm/core": "^7.2.5",
