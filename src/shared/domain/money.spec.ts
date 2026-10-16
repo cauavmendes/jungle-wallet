@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { Money } from './money';
-import { InvalidCurrencyError, InvalidMoneyAmountError } from './errors';
+import {
+  CurrencyMismatchError,
+  InvalidCurrencyError,
+  InvalidMoneyAmountError,
+} from './errors';
 
 describe('Money', () => {
   describe('from', () => {
@@ -45,6 +49,31 @@ describe('Money', () => {
       expect(() => Money.from({ amount: '10.00', currency })).toThrow(
         InvalidCurrencyError,
       );
+    });
+  });
+
+  describe('add', () => {
+    it('adds two amounts of the same currency', () => {
+      const a = Money.from({ amount: '10.00', currency: 'BRL' });
+      const b = Money.from({ amount: '5.50', currency: 'BRL' });
+
+      expect(a.add(b).toJSON()).toEqual({ amount: '15.50', currency: 'BRL' });
+    });
+
+    it('does not change the original instance', () => {
+      const a = Money.from({ amount: '10.00', currency: 'BRL' });
+      const b = Money.from({ amount: '5.50', currency: 'BRL' });
+
+      a.add(b);
+
+      expect(a.toJSON()).toEqual({ amount: '10.00', currency: 'BRL' });
+    });
+
+    it('rejects amounts of different currencies', () => {
+      const brl = Money.from({ amount: '10.00', currency: 'BRL' });
+      const usd = Money.from({ amount: '5.00', currency: 'USD' });
+
+      expect(() => brl.add(usd)).toThrow(CurrencyMismatchError);
     });
   });
 });

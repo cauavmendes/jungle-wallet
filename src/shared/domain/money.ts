@@ -1,4 +1,8 @@
-import { InvalidCurrencyError, InvalidMoneyAmountError } from './errors';
+import {
+  CurrencyMismatchError,
+  InvalidCurrencyError,
+  InvalidMoneyAmountError,
+} from './errors';
 
 const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
@@ -24,6 +28,20 @@ export class Money {
 
   toJSON(): MoneyProps {
     return { amount: formatCents(this.cents), currency: this.currency };
+  }
+
+  add(other: Money): Money {
+    this.assertSameCurrency(other);
+
+    return new Money(this.cents + other.cents, this.currency);
+  }
+
+  private assertSameCurrency(other: Money): void {
+    if (this.currency !== other.currency) {
+      throw new CurrencyMismatchError(
+        `Currency mismatch: ${this.currency} and ${other.currency}`,
+      );
+    }
   }
 }
 
