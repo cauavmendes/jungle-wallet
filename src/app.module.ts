@@ -1,10 +1,8 @@
+import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import mikroOrmConfig from './infrastructure/database/mikro-orm.config';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [MikroOrmModule.forRoot(mikroOrmConfig)],
 })
 export class AppModule {}
