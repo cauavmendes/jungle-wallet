@@ -142,7 +142,9 @@ describe('three application instances', () => {
       bet(wallet, randomUUID(), '80.00', 0),
       bet(wallet, randomUUID(), '80.00', 1),
     ]);
-    const statuses = responses.map((response) => response.status).sort();
+    const statuses = responses
+      .map((response) => response.status)
+      .sort((a, b) => a - b);
 
     expect(statuses).toEqual([201, 422]);
 

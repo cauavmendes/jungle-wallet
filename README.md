@@ -26,12 +26,12 @@ Nenhuma conta ou token é necessário: o MiniStack substitui o LocalStack, que p
 
 ```bash
 bun install
-docker compose up -d
+docker compose up -d --wait
 bun run db:migrate
 bun run start:dev
 ```
 
-A aplicação sobe em `http://localhost:3000`. O `docker compose up -d` cria:
+A aplicação sobe em `http://localhost:3000`. O `docker compose up -d --wait` cria os containers e só devolve o terminal quando o PostgreSQL está pronto para receber conexões:
 
 - o PostgreSQL, com os bancos `wallet` (desenvolvimento) e `wallet_test` (testes de integração);
 - o MiniStack, com as filas `wager-transactions.fifo`, `wager-transactions-dlq.fifo` e `wallet-events.fifo`.
