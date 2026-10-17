@@ -45,6 +45,12 @@ export class Metrics {
     registers: [this.registry],
   });
 
+  readonly reconciliationDivergencesTotal = new Counter({
+    name: 'wallet_reconciliation_divergences_total',
+    help: 'Reconciliations where the stored balance diverged from the ledger',
+    registers: [this.registry],
+  });
+
   readonly processingDuration = new Histogram({
     name: 'wager_processing_duration_seconds',
     help: 'Time to process a wager transaction',
