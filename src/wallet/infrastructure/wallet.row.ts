@@ -7,8 +7,8 @@ export interface WalletRow {
   currency: string;
   balance_cents: string;
   version: number;
-  created_at: Date;
-  updated_at: Date;
+  created_at: Date | string;
+  updated_at: Date | string;
 }
 
 export const WALLET_COLUMNS =
@@ -21,7 +21,7 @@ export function toWallet(row: WalletRow): Wallet {
     currency: row.currency,
     balance: Money.fromCents(BigInt(row.balance_cents), row.currency),
     version: row.version,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
   });
 }

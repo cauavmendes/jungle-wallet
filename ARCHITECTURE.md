@@ -5,7 +5,7 @@ Este documento registra as decisões técnicas, os trade-offs e as limitações 
 ## Stack e ambiente
 
 - **Bun como runtime e test runner**: os scripts executam `src/main.ts` diretamente com o Bun, deixando o runtime explícito no `package.json`.
-- **TypeScript em modo estrito completo**, sem exceções. DTOs de entrada usam a asserção `!` de forma localizada.
+- **TypeScript em modo estrito completo**, sem exceções.
 - **CommonJS em vez de ESM**: maior maturidade do ecossistema NestJS/MikroORM e menos risco de configuração no prazo do desafio.
 - **MiniStack em vez de LocalStack**: desde março de 2026 o LocalStack exige token de autenticação, o que impediria o avaliador de subir o ambiente sem criar conta. O MiniStack é MIT, não exige conta e é compatível na porta 4566.
 - **Versões de imagem fixas** (`postgres:17-alpine`, `ministackorg/ministack:1.5.27`), para que o ambiente seja reproduzível.
@@ -144,6 +144,7 @@ Não implementada, conforme permitido pelo desafio (seção 2). Desenho adotado:
 - **Configuração lida diretamente de `process.env`**, com valores padrão para o ambiente local e sem validação na subida. Em produção, um módulo de configuração validado evitaria subir a aplicação com uma variável faltando.
 - **Métricas por instância**: cada processo expõe os próprios contadores. É o modelo usual do Prometheus, que coleta de cada instância e agrega.
 - **O cursor do ledger é opaco, mas não secreto**: é o `sequence` em base64url. Não carrega informação sensível, apenas a posição no ledger.
+- **O `/health/ready` verifica se o banco responde, mas não se as migrations foram aplicadas.** Uma instância subindo sem as tabelas aparece como pronta; em produção, a verificação incluiria a versão do schema.
 
 ### Validação
 
