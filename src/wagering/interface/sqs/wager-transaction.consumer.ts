@@ -11,6 +11,7 @@ import {
   Logger,
   type OnApplicationBootstrap,
 } from '@nestjs/common';
+import { Metrics } from '../../../metrics/metrics';
 import { createSqsClient } from '../../../shared/infrastructure/sqs-client';
 import {
   type HandledMessage,
@@ -39,7 +40,10 @@ export class WagerTransactionConsumer
   private running = false;
   private loop: Promise<void> | undefined;
 
-  constructor(private readonly handler: WagerMessageHandler) {}
+  constructor(
+    private readonly handler: WagerMessageHandler,
+    private readonly metrics: Metrics,
+  ) {}
 
   onApplicationBootstrap(): void {
     if (process.env.SQS_CONSUMER_ENABLED === 'false') {
@@ -93,9 +97,11 @@ export class WagerTransactionConsumer
         await this.delete(message);
         break;
       case MessageDisposition.DeadLetter:
+        this.metrics.deadLetteredTotal.inc();
         await this.moveToDeadLetterQueue(message, result);
         break;
       case MessageDisposition.Retry:
+        this.metrics.retriesTotal.inc();
         await this.scheduleRetry(message, result);
         break;
     }
@@ -129,9 +135,11 @@ export class WagerTransactionConsumer
       }),
     );
     await this.delete(message);
-    this.logger.warn(
-      `Message ${message.MessageId} moved to the dead letter queue: ${result.reason}`,
-    );
+    this.logger.warn({
+      message: 'Message moved to the dead letter queue',
+      messageId: message.MessageId,
+      reason: result.reason,
+    });
   }
 
   private async scheduleRetry(
@@ -153,9 +161,12 @@ export class WagerTransactionConsumer
         VisibilityTimeout: visibilityTimeout,
       }),
     );
-    this.logger.warn(
-      `Message ${message.MessageId} will be retried in ${visibilityTimeout}s: ${result.reason}`,
-    );
+    this.logger.warn({
+      message: 'Message scheduled for retry',
+      messageId: message.MessageId,
+      retryInSeconds: visibilityTimeout,
+      reason: result.reason,
+    });
   }
 
   private async release(messages: Message[]): Promise<void> {

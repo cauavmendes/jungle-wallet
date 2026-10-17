@@ -1,10 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { DomainErrorFilter } from './shared/interface/http/domain-error.filter';
+import { JsonLogger } from './shared/infrastructure/json-logger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.useGlobalFilters(new DomainErrorFilter());
+  const app = await NestFactory.create(AppModule, { logger: new JsonLogger() });
   app.enableShutdownHooks();
   await app.listen(process.env.PORT ?? 3000);
 }

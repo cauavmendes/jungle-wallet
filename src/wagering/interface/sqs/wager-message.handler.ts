@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InboxMessage } from '../../../inbox/domain/inbox-message';
+import { Metrics } from '../../../metrics/metrics';
 import {
   DomainError,
   InvalidCurrencyError,
@@ -62,6 +63,8 @@ export class WagerMessageHandler {
     private readonly processWager: ProcessWagerTransactionUseCase,
     @Inject(WAGER_PROCESSING_STORE)
     private readonly store: WagerProcessingStore,
+    @Optional()
+    private readonly metrics?: Metrics,
   ) {}
 
   async handle(body: string): Promise<HandledMessage> {
@@ -82,11 +85,16 @@ export class WagerMessageHandler {
     );
 
     if (alreadyProcessed) {
+      this.metrics?.duplicatesTotal.inc({ source: 'sqs' });
       return {
         disposition: MessageDisposition.Ack,
         reason: 'duplicate message',
       };
     }
+
+    const stopTimer = this.metrics?.processingDuration.startTimer({
+      source: 'sqs',
+    });
 
     try {
       const command = parseProcessWagerRequest(
@@ -94,7 +102,7 @@ export class WagerMessageHandler {
         envelope.data,
       );
 
-      await this.processWager.execute({
+      const result = await this.processWager.execute({
         ...command,
         correlationId: envelope.messageId,
         inboxMessage: InboxMessage.receive({
@@ -105,9 +113,31 @@ export class WagerMessageHandler {
         }),
       });
 
+      this.metrics?.transactionsTotal.inc({
+        status: result.status,
+        source: 'sqs',
+      });
+
+      if (result.idempotentReplay) {
+        this.metrics?.duplicatesTotal.inc({ source: 'sqs' });
+      }
+
       return { disposition: MessageDisposition.Ack };
     } catch (error) {
+      this.recordLockConflict(error);
       return { disposition: classify(error), reason: describe(error) };
+    } finally {
+      stopTimer?.();
+    }
+  }
+
+  private recordLockConflict(error: unknown): void {
+    if (error instanceof WalletLockTimeoutError) {
+      this.metrics?.lockConflictsTotal.inc({ reason: 'lock_timeout' });
+    }
+
+    if (error instanceof ConcurrentWalletModificationError) {
+      this.metrics?.lockConflictsTotal.inc({ reason: 'version_mismatch' });
     }
   }
 }

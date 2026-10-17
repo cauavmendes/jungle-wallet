@@ -8,6 +8,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { Metrics } from '../../../metrics/metrics';
 import type { MoneyProps } from '../../../shared/domain/money';
 import { isNonEmptyString } from '../../../shared/interface/http/validation';
 import {
@@ -27,7 +28,10 @@ export interface ProcessWagerResponse {
 
 @Controller('wagering/transactions')
 export class WagerTransactionController {
-  constructor(private readonly processWager: ProcessWagerTransactionUseCase) {}
+  constructor(
+    private readonly processWager: ProcessWagerTransactionUseCase,
+    private readonly metrics: Metrics,
+  ) {}
 
   @Post()
   async process(
@@ -37,12 +41,31 @@ export class WagerTransactionController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<ProcessWagerResponse> {
     const command = parseProcessWagerRequest(idempotencyKey, body);
-    const result = await this.processWager.execute({
-      ...command,
-      correlationId: isNonEmptyString(correlationId)
-        ? correlationId
-        : randomUUID(),
+    const stopTimer = this.metrics.processingDuration.startTimer({
+      source: 'http',
     });
+
+    let result: ProcessWagerResult;
+
+    try {
+      result = await this.processWager.execute({
+        ...command,
+        correlationId: isNonEmptyString(correlationId)
+          ? correlationId
+          : randomUUID(),
+      });
+    } finally {
+      stopTimer();
+    }
+
+    this.metrics.transactionsTotal.inc({
+      status: result.status,
+      source: 'http',
+    });
+
+    if (result.idempotentReplay) {
+      this.metrics.duplicatesTotal.inc({ source: 'http' });
+    }
 
     response.status(statusFor(result));
 

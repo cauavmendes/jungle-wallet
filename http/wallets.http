@@ -54,3 +54,12 @@ GET {{baseUrl}}/wallets/00000000-0000-0000-0000-000000000000
 
 ###
 GET {{baseUrl}}/wallets/abc
+
+###
+GET {{baseUrl}}/health/live
+
+###
+GET {{baseUrl}}/health/ready
+
+###
+GET {{baseUrl}}/metrics
