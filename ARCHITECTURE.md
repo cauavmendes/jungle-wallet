@@ -50,18 +50,29 @@ Este documento registra as decisões técnicas, os trade-offs e as limitações 
 | ------------------------------------- | ------ | ------------------------------------------------------------- |
 | Entrada com formato ou valor inválido | 400    | `INVALID_REQUEST`, `INVALID_MONEY_AMOUNT`, `INVALID_CURRENCY` |
 | Recurso não encontrado                | 404    | `WALLET_NOT_FOUND`                                            |
-| Conflito com o estado existente       | 409    | `WALLET_ALREADY_EXISTS`                                       |
-| Regra de negócio recusada             | 422    | `INSUFFICIENT_FUNDS`                                          |
+| Conflito com o estado existente       | 409    | `WALLET_ALREADY_EXISTS`, `IDEMPOTENCY_CONFLICT`               |
+| Regra de negócio recusada             | 422    | `INSUFFICIENT_FUNDS`, `WALLET_PLAYER_MISMATCH`                |
+| Falha transitória, pode reenviar      | 503    | `CONCURRENT_WALLET_MODIFICATION`                              |
 
 Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `code` é estável e legível por máquina, para o provedor decidir se reenvia, corrige ou desiste sem interpretar texto.
 
 ## Concorrência
 
-_A definir._
+- **Unidade de concorrência: a carteira.** Cada processamento abre uma transação e executa `SELECT ... FROM wallets WHERE id = :walletId FOR UPDATE`, trancando só a linha daquela carteira. Operações na mesma carteira são serializadas; carteiras diferentes não se bloqueiam. Não existe lock global.
+- **Lock pessimista em vez de otimista:** numa carteira muito disputada, o lock otimista geraria falhas e retries em cascata. O lock pessimista troca isso por uma espera curta, restrita à mesma carteira.
+- **Verificação de versão como defesa extra:** o `UPDATE` do saldo inclui `WHERE version = :versaoEsperada`. Com o lock, a condição sempre é satisfeita; se algum dia não for, a transação inteira é desfeita (`CONCURRENT_WALLET_MODIFICATION`, 503) em vez de perder uma atualização.
+- **O lock vive no banco**, então a garantia vale igualmente para uma ou várias instâncias da aplicação.
+- Testes de integração em `test/integration/` provam os cenários com paralelismo real contra o PostgreSQL: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger.
+- **`lock_timeout` de 5 segundos:** se o lock da carteira não for obtido nesse prazo, a requisição falha com `WALLET_LOCK_TIMEOUT` (503) em vez de esperar indefinidamente, sinalizando ao provedor que pode reenviar.
 
 ## Idempotência
 
-_A definir._
+- **Verificação sempre depois do lock:** a busca pela idempotency key acontece com a carteira já trancada. Assim, a resposta "já existe?" não pode ficar desatualizada entre a verificação e a gravação (problema _check-then-act_).
+- **`UNIQUE (idempotency_key)` como última defesa:** se uma duplicata escapar do lock (por exemplo, a mesma key enviada para carteiras diferentes), o banco recusa; a aplicação tenta uma única vez de novo e responde como replay ou conflito.
+- **Hash do payload:** SHA-256 de um JSON canônico (chaves ordenadas em todos os níveis) com os campos de negócio: `providerId`, `externalTransactionId`, `playerId`, `walletId`, `roundId`, `gameId`, `kind`, `money` e `referenceExternalTransactionId`. O cabeçalho e os metadados de transporte não entram. O valor entra normalizado (`"25"` e `"25.00"` geram o mesmo hash) e campos ausentes entram como `null`.
+- **Mesma key e mesmo hash:** replay, com o resultado original, incluindo o saldo observado naquele momento (guardado em `balance_after_cents`).
+- **Mesma key e hash diferente:** conflito (`IDEMPOTENCY_CONFLICT`, 409), nunca replay.
+- **Status HTTP do processamento:** 201 para transação nova processada, 200 para replay e 422 para rejeição por regra de negócio. A rejeição é gravada e auditável, e o replay de uma rejeição devolve o mesmo 422.
 
 ## Mensageria (inbox e outbox)
 
