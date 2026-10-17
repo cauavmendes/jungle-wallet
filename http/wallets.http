@@ -60,3 +60,6 @@ GET {{baseUrl}}/health/live
 
 ###
 GET {{baseUrl}}/health/ready
+
+###
+GET {{baseUrl}}/metrics
