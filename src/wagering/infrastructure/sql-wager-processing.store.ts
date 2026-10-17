@@ -4,6 +4,7 @@ import {
 } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
+import type { InboxMessage } from '../../inbox/domain/inbox-message';
 import type { IntegrationEvent } from '../../shared/application/integration-event';
 import { Money } from '../../shared/domain/money';
 import type { Wallet } from '../../wallet/domain/wallet';
@@ -89,6 +90,22 @@ export class SqlWagerProcessingStore implements WagerProcessingStore {
       throw error;
     }
   }
+
+  async isInboxMessageProcessed(
+    consumerName: string,
+    messageId: string,
+  ): Promise<boolean> {
+    const rows = (await this.em.fork().execute(
+      `SELECT 1
+         FROM inbox_messages
+        WHERE consumer_name = :consumerName
+          AND message_id = :messageId
+          AND processed_at IS NOT NULL`,
+      { consumerName, messageId },
+    )) as unknown[];
+
+    return rows.length > 0;
+  }
 }
 
 class SqlWalletSession implements WalletSession {
@@ -129,6 +146,21 @@ class SqlWalletSession implements WalletSession {
     for (const event of events) {
       await this.insertOutboxMessage(event);
     }
+  }
+
+  async recordInboxMessage(message: InboxMessage): Promise<void> {
+    await this.em.execute(
+      `INSERT INTO inbox_messages (consumer_name, message_id, payload_hash, received_at, processed_at)
+       VALUES (:consumerName, :messageId, :payloadHash, :receivedAt, :processedAt)
+       ON CONFLICT (consumer_name, message_id) DO NOTHING`,
+      {
+        consumerName: message.consumerName,
+        messageId: message.messageId,
+        payloadHash: message.payloadHash,
+        receivedAt: message.receivedAt,
+        processedAt: message.processedAt ?? null,
+      },
+    );
   }
 
   private async insertTransaction(

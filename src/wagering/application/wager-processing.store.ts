@@ -1,3 +1,4 @@
+import type { InboxMessage } from '../../inbox/domain/inbox-message';
 import type { IntegrationEvent } from '../../shared/application/integration-event';
 import type { Money } from '../../shared/domain/money';
 import type { Wallet } from '../../wallet/domain/wallet';
@@ -25,6 +26,7 @@ export interface WalletSession {
     idempotencyKey: string,
   ): Promise<StoredWagerTransaction | null>;
   save(outcome: WagerOutcome): Promise<void>;
+  recordInboxMessage(message: InboxMessage): Promise<void>;
 }
 
 export interface WagerProcessingStore {
@@ -32,4 +34,8 @@ export interface WagerProcessingStore {
     walletId: string,
     work: (session: WalletSession) => Promise<T>,
   ): Promise<T>;
+  isInboxMessageProcessed(
+    consumerName: string,
+    messageId: string,
+  ): Promise<boolean>;
 }

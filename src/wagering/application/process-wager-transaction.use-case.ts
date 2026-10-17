@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { InboxMessage } from '../../inbox/domain/inbox-message';
 import type {
   IntegrationEvent,
   IntegrationEventContext,
@@ -55,6 +56,7 @@ export interface ProcessWagerCommand {
   kind: WagerTransactionKind;
   money: Money;
   referenceExternalTransactionId: string | undefined;
+  inboxMessage?: InboxMessage;
 }
 
 export interface ProcessWagerResult {
@@ -108,48 +110,61 @@ export class ProcessWagerTransactionUseCase {
     payloadHash: string,
   ): Promise<ProcessWagerResult> {
     return this.store.withLockedWallet(command.walletId, async (session) => {
-      const existing = await session.findByIdempotencyKey(
-        command.idempotencyKey,
-      );
+      const result = await this.decide(session, command, payloadHash);
 
-      if (existing) {
-        return replay(existing, payloadHash);
+      if (command.inboxMessage) {
+        command.inboxMessage.markProcessed(new Date());
+        await session.recordInboxMessage(command.inboxMessage);
       }
 
-      const wallet = requireWalletFor(session, command);
-      const now = new Date();
-      const transaction = WagerTransaction.create({
-        id: randomUUID(),
-        providerId: command.providerId,
-        externalTransactionId: command.externalTransactionId,
-        idempotencyKey: command.idempotencyKey,
-        payloadHash,
-        walletId: wallet.id,
-        playerId: wallet.playerId,
-        roundId: command.roundId,
-        gameId: command.gameId,
-        kind: command.kind,
-        money: command.money,
-        referenceExternalTransactionId: command.referenceExternalTransactionId,
-        createdAt: now,
-      });
-      const previousVersion = wallet.version;
-      const ledgerEntry = applyToWallet(transaction, wallet, now);
-      const events = buildEvents(transaction, wallet, ledgerEntry, {
-        correlationId: command.correlationId,
-        causationId: command.idempotencyKey,
-      });
-
-      await session.save({
-        transaction,
-        wallet,
-        previousVersion,
-        ledgerEntry,
-        events,
-      });
-
-      return toResult(transaction, wallet.balance, false);
+      return result;
     });
+  }
+
+  private async decide(
+    session: WalletSession,
+    command: ProcessWagerCommand,
+    payloadHash: string,
+  ): Promise<ProcessWagerResult> {
+    const existing = await session.findByIdempotencyKey(command.idempotencyKey);
+
+    if (existing) {
+      return replay(existing, payloadHash);
+    }
+
+    const wallet = requireWalletFor(session, command);
+    const now = new Date();
+    const transaction = WagerTransaction.create({
+      id: randomUUID(),
+      providerId: command.providerId,
+      externalTransactionId: command.externalTransactionId,
+      idempotencyKey: command.idempotencyKey,
+      payloadHash,
+      walletId: wallet.id,
+      playerId: wallet.playerId,
+      roundId: command.roundId,
+      gameId: command.gameId,
+      kind: command.kind,
+      money: command.money,
+      referenceExternalTransactionId: command.referenceExternalTransactionId,
+      createdAt: now,
+    });
+    const previousVersion = wallet.version;
+    const ledgerEntry = applyToWallet(transaction, wallet, now);
+    const events = buildEvents(transaction, wallet, ledgerEntry, {
+      correlationId: command.correlationId,
+      causationId: command.idempotencyKey,
+    });
+
+    await session.save({
+      transaction,
+      wallet,
+      previousVersion,
+      ledgerEntry,
+      events,
+    });
+
+    return toResult(transaction, wallet.balance, false);
   }
 }
 
