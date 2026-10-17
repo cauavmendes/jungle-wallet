@@ -19,7 +19,7 @@ const SUBMITTABLE_KINDS = new Set<string>([
 export function parseProcessWagerRequest(
   idempotencyKey: unknown,
   body: unknown,
-): ProcessWagerCommand {
+): Omit<ProcessWagerCommand, 'correlationId'> {
   if (!isNonEmptyString(idempotencyKey)) {
     throw new InvalidRequestError('Idempotency-Key header is required');
   }

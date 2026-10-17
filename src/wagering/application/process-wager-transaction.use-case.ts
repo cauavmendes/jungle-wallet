@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type {
+  IntegrationEvent,
+  IntegrationEventContext,
+} from '../../shared/application/integration-event';
 import { CurrencyMismatchError } from '../../shared/domain/errors';
 import type { Money } from '../../shared/domain/money';
 import type { Wallet } from '../../wallet/domain/wallet';
@@ -12,7 +16,7 @@ import {
   FailureCode,
   WagerTransaction,
   WagerTransactionKind,
-  type WagerTransactionStatus,
+  WagerTransactionStatus,
 } from '../domain/wager-transaction';
 import {
   DuplicateTransactionError,
@@ -21,6 +25,11 @@ import {
   WalletPlayerMismatchError,
 } from '../domain/wager.errors';
 import { hashWagerPayload } from './payload-hash';
+import {
+  WagerTransactionProcessed,
+  WagerTransactionRejected,
+  WalletBalanceChanged,
+} from './wager-events';
 import {
   type StoredWagerTransaction,
   WAGER_PROCESSING_STORE,
@@ -36,6 +45,7 @@ const SUPPORTED_KINDS = new Set([
 
 export interface ProcessWagerCommand {
   idempotencyKey: string;
+  correlationId: string;
   providerId: string;
   externalTransactionId: string;
   playerId: string;
@@ -125,8 +135,18 @@ export class ProcessWagerTransactionUseCase {
       });
       const previousVersion = wallet.version;
       const ledgerEntry = applyToWallet(transaction, wallet, now);
+      const events = buildEvents(transaction, wallet, ledgerEntry, {
+        correlationId: command.correlationId,
+        causationId: command.idempotencyKey,
+      });
 
-      await session.save({ transaction, wallet, previousVersion, ledgerEntry });
+      await session.save({
+        transaction,
+        wallet,
+        previousVersion,
+        ledgerEntry,
+        events,
+      });
 
       return toResult(transaction, wallet.balance, false);
     });
@@ -198,6 +218,29 @@ function applyBet(
 
     throw error;
   }
+}
+
+function buildEvents(
+  transaction: WagerTransaction,
+  wallet: Wallet,
+  ledgerEntry: WalletLedgerEntry | undefined,
+  context: IntegrationEventContext,
+): IntegrationEvent<unknown>[] {
+  if (transaction.status === WagerTransactionStatus.Rejected) {
+    return [
+      WagerTransactionRejected.from(transaction, wallet.balance, context),
+    ];
+  }
+
+  const events: IntegrationEvent<unknown>[] = [
+    WagerTransactionProcessed.from(transaction, wallet.balance, context),
+  ];
+
+  if (ledgerEntry) {
+    events.push(WalletBalanceChanged.from(wallet, ledgerEntry, context));
+  }
+
+  return events;
 }
 
 function replay(

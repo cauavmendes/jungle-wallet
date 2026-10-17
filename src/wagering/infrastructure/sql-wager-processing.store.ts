@@ -4,6 +4,7 @@ import {
 } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
+import type { IntegrationEvent } from '../../shared/application/integration-event';
 import { Money } from '../../shared/domain/money';
 import type { Wallet } from '../../wallet/domain/wallet';
 import type { WalletLedgerEntry } from '../../wallet/domain/wallet-ledger-entry';
@@ -113,6 +114,7 @@ class SqlWalletSession implements WalletSession {
     wallet,
     previousVersion,
     ledgerEntry,
+    events,
   }: WagerOutcome): Promise<void> {
     await this.insertTransaction(transaction, wallet);
 
@@ -122,6 +124,10 @@ class SqlWalletSession implements WalletSession {
 
     if (wallet.version !== previousVersion) {
       await this.updateWallet(wallet, previousVersion);
+    }
+
+    for (const event of events) {
+      await this.insertOutboxMessage(event);
     }
   }
 
@@ -205,6 +211,22 @@ class SqlWalletSession implements WalletSession {
         `Wallet ${wallet.id} was modified concurrently`,
       );
     }
+  }
+
+  private async insertOutboxMessage(
+    event: IntegrationEvent<unknown>,
+  ): Promise<void> {
+    await this.em.execute(
+      `INSERT INTO outbox_messages (id, aggregate_id, event_type, payload, occurred_at)
+       VALUES (:id, :aggregateId, :eventType, CAST(:payload AS jsonb), :occurredAt)`,
+      {
+        id: event.eventId,
+        aggregateId: event.aggregateId,
+        eventType: event.eventType,
+        payload: JSON.stringify(event.toJSON()),
+        occurredAt: event.occurredAt,
+      },
+    );
   }
 }
 

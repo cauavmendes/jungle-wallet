@@ -53,6 +53,7 @@ function betCommand(
 
   return {
     idempotencyKey: `provider-a:${externalTransactionId}`,
+    correlationId: randomUUID(),
     providerId: 'provider-a',
     externalTransactionId,
     playerId: wallet.playerId,
@@ -96,6 +97,18 @@ async function countDebits(walletId: string): Promise<number> {
   return row?.total ?? 0;
 }
 
+async function eventTypesFor(transactionId: string): Promise<string[]> {
+  const rows = (await orm.em.fork().execute(
+    `SELECT event_type
+       FROM outbox_messages
+      WHERE payload -> 'data' ->> 'transactionId' = :transactionId
+      ORDER BY event_type`,
+    { transactionId },
+  )) as { event_type: string }[];
+
+  return rows.map((row) => row.event_type);
+}
+
 describe('wager processing under concurrency', () => {
   it('debits only once when the same bet arrives 50 times in parallel', async () => {
     const wallet = await openWallet('1000.00');
@@ -118,6 +131,12 @@ describe('wager processing under concurrency', () => {
       results.every((result) => result.balance?.toJSON().amount === '975.00'),
     ).toBe(true);
     expect(await countDebits(wallet.id)).toBe(1);
+
+    const transactionId = results[0]?.transactionId ?? '';
+    expect(await eventTypesFor(transactionId)).toEqual([
+      'WagerTransactionProcessed',
+      'WalletBalanceChanged',
+    ]);
 
     const { stored, fromLedger } = await balances(wallet.id);
     expect(stored).toBe(97500n);
@@ -142,6 +161,9 @@ describe('wager processing under concurrency', () => {
       (result) => result.status === WagerTransactionStatus.Rejected,
     );
     expect(rejected?.failureCode).toBe(FailureCode.InsufficientFunds);
+    expect(await eventTypesFor(rejected?.transactionId ?? '')).toEqual([
+      'WagerTransactionRejected',
+    ]);
     expect(await countDebits(wallet.id)).toBe(1);
 
     const { stored, fromLedger } = await balances(wallet.id);
