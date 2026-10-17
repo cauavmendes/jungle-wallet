@@ -2,21 +2,32 @@ import { randomUUID } from 'node:crypto';
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpStatus,
+  Param,
   Post,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { Metrics } from '../../../metrics/metrics';
 import type { MoneyProps } from '../../../shared/domain/money';
-import { isNonEmptyString } from '../../../shared/interface/http/validation';
+import { InvalidRequestError } from '../../../shared/interface/http/invalid-request.error';
+import {
+  isNonEmptyString,
+  isUuid,
+} from '../../../shared/interface/http/validation';
+import { GetWagerTransactionUseCase } from '../../application/get-wager-transaction.use-case';
 import {
   type ProcessWagerResult,
   ProcessWagerTransactionUseCase,
 } from '../../application/process-wager-transaction.use-case';
 import { WagerTransactionStatus } from '../../domain/wager-transaction';
 import { parseProcessWagerRequest } from '../process-wager.request';
+import {
+  toWagerTransactionResponse,
+  type WagerTransactionResponse,
+} from './wager-transaction.response';
 
 export interface ProcessWagerResponse {
   transactionId: string;
@@ -30,6 +41,7 @@ export interface ProcessWagerResponse {
 export class WagerTransactionController {
   constructor(
     private readonly processWager: ProcessWagerTransactionUseCase,
+    private readonly getWagerTransaction: GetWagerTransactionUseCase,
     private readonly metrics: Metrics,
   ) {}
 
@@ -70,6 +82,19 @@ export class WagerTransactionController {
     response.status(statusFor(result));
 
     return toResponse(result);
+  }
+
+  @Get(':transactionId')
+  async findOne(
+    @Param('transactionId') transactionId: string,
+  ): Promise<WagerTransactionResponse> {
+    if (!isUuid(transactionId)) {
+      throw new InvalidRequestError('transactionId must be a UUID');
+    }
+
+    return toWagerTransactionResponse(
+      await this.getWagerTransaction.byId(transactionId),
+    );
   }
 }
 
