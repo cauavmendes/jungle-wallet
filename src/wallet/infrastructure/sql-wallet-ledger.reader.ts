@@ -21,7 +21,7 @@ interface LedgerRow {
   amount_cents: string;
   balance_before_cents: string;
   balance_after_cents: string;
-  created_at: Date;
+  created_at: Date | string;
   currency: string;
 }
 
@@ -129,6 +129,6 @@ function toLedgerEntry(row: LedgerRow): WalletLedgerEntry {
       BigInt(row.balance_after_cents),
       row.currency,
     ),
-    createdAt: row.created_at,
+    createdAt: new Date(row.created_at),
   });
 }
