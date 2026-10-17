@@ -63,6 +63,7 @@ Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `cod
 - **Verificação de versão como defesa extra:** o `UPDATE` do saldo inclui `WHERE version = :versaoEsperada`. Com o lock, a condição sempre é satisfeita; se algum dia não for, a transação inteira é desfeita (`CONCURRENT_WALLET_MODIFICATION`, 503) em vez de perder uma atualização.
 - **O lock vive no banco**, então a garantia vale igualmente para uma ou várias instâncias da aplicação.
 - Testes de integração em `test/integration/` provam os cenários com paralelismo real contra o PostgreSQL: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger.
+- **`lock_timeout` de 5 segundos:** se o lock da carteira não for obtido nesse prazo, a requisição falha com `WALLET_LOCK_TIMEOUT` (503) em vez de esperar indefinidamente, sinalizando ao provedor que pode reenviar.
 
 ## Idempotência
 
