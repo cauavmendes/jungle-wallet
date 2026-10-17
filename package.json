@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "bun src/infrastructure/database/migrate.ts",
     "db:rollback": "bun src/infrastructure/database/rollback.ts",
+    "sqs:send": "bun scripts/send-wager-message.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "bun src/main.ts",
     "start:dev": "bun --watch src/main.ts",
