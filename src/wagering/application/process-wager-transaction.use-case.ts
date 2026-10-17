@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { InboxMessage } from '../../inbox/domain/inbox-message';
 import type {
   IntegrationEvent,
@@ -69,6 +69,8 @@ export interface ProcessWagerResult {
 
 @Injectable()
 export class ProcessWagerTransactionUseCase {
+  private readonly logger = new Logger(ProcessWagerTransactionUseCase.name);
+
   constructor(
     @Inject(WAGER_PROCESSING_STORE)
     private readonly store: WagerProcessingStore,
@@ -116,6 +118,18 @@ export class ProcessWagerTransactionUseCase {
         command.inboxMessage.markProcessed(new Date());
         await session.recordInboxMessage(command.inboxMessage);
       }
+
+      this.logger.log({
+        message: 'Wager transaction handled',
+        correlationId: command.correlationId,
+        messageId: command.inboxMessage?.messageId,
+        transactionId: result.transactionId,
+        walletId: command.walletId,
+        providerId: command.providerId,
+        status: result.status,
+        failureCode: result.failureCode,
+        idempotentReplay: result.idempotentReplay,
+      });
 
       return result;
     });
