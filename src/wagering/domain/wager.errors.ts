@@ -27,3 +27,7 @@ export class DuplicateTransactionError extends DomainError {
 export class ConcurrentWalletModificationError extends DomainError {
   readonly code = 'CONCURRENT_WALLET_MODIFICATION';
 }
+
+export class WalletLockTimeoutError extends DomainError {
+  readonly code = 'WALLET_LOCK_TIMEOUT';
+}

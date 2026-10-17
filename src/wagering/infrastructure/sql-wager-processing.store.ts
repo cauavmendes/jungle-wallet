@@ -1,4 +1,7 @@
-import { UniqueConstraintViolationException } from '@mikro-orm/core';
+import {
+  LockWaitTimeoutException,
+  UniqueConstraintViolationException,
+} from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 import { Money } from '../../shared/domain/money';
@@ -24,6 +27,7 @@ import {
 import {
   ConcurrentWalletModificationError,
   DuplicateTransactionError,
+  WalletLockTimeoutError,
 } from '../domain/wager.errors';
 
 interface WagerTransactionRow {
@@ -58,6 +62,8 @@ export class SqlWagerProcessingStore implements WagerProcessingStore {
   ): Promise<T> {
     try {
       return await this.em.fork().transactional(async (em) => {
+        await em.execute(`SET LOCAL lock_timeout = '5s'`);
+
         const rows = (await em.execute(
           `SELECT ${WALLET_COLUMNS} FROM wallets WHERE id = :walletId FOR UPDATE`,
           { walletId },
@@ -70,6 +76,12 @@ export class SqlWagerProcessingStore implements WagerProcessingStore {
       if (error instanceof UniqueConstraintViolationException) {
         throw new DuplicateTransactionError(
           'Transaction was already recorded by a concurrent request',
+        );
+      }
+
+      if (error instanceof LockWaitTimeoutException) {
+        throw new WalletLockTimeoutError(
+          `Timed out waiting for the lock on wallet ${walletId}`,
         );
       }
 
