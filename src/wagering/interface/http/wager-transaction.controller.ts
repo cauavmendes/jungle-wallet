@@ -15,7 +15,7 @@ import {
   ProcessWagerTransactionUseCase,
 } from '../../application/process-wager-transaction.use-case';
 import { WagerTransactionStatus } from '../../domain/wager-transaction';
-import { parseProcessWagerRequest } from './process-wager.request';
+import { parseProcessWagerRequest } from '../process-wager.request';
 
 export interface ProcessWagerResponse {
   transactionId: string;

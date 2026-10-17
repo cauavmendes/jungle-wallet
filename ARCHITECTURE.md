@@ -73,24 +73,39 @@ Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `cod
 - **Mesma key e hash diferente:** conflito (`IDEMPOTENCY_CONFLICT`, 409), nunca replay.
 - **Status HTTP do processamento:** 201 para transação nova processada, 200 para replay e 422 para rejeição por regra de negócio. A rejeição é gravada e auditável, e o replay de uma rejeição devolve o mesmo 422.
 
-## Mensageria (outbox)
+## Mensageria
 
-- **Transactional Outbox:** os eventos de integração são gravados em `outbox_messages` na mesma transação SQL da aposta, do lançamento e do saldo. Ou tudo é confirmado junto, ou nada é; nenhum evento é publicado antes do commit.
+### Entrada: consumidor SQS com inbox
+
+- **Mesmo caso de uso da API:** o consumidor da fila `wager-transactions.fifo` valida o `data` da mensagem com o mesmo parser da API e chama o mesmo `ProcessWagerTransactionUseCase`.
+- **Inbox persistente:** cada mensagem é registrada em `inbox_messages` por `(consumer_name, message_id)`, na mesma transação SQL da alteração financeira, do ledger e da outbox. Mensagens já registradas são confirmadas sem abrir transação. A idempotency key continua como segunda defesa.
+- **Ack somente após o commit:** a mensagem só é apagada da fila depois que o processamento terminou. Se o processo morrer entre o commit e o ack, a reentrega é reconhecida pela inbox e confirmada sem novo efeito.
+- **Classificação de erros:**
+  - **negócio** (rejeição gravada, carteira inexistente, jogador incorreto, conflito de idempotência): ack;
+  - **transitório** (lock não obtido, modificação concorrente, erros de infraestrutura desconhecidos): a mensagem volta para a fila com visibilidade crescente (2 s, 4 s, 8 s... até 5 minutos), calculada a partir do `ApproximateReceiveCount`;
+  - **permanente** (JSON inválido, mensagem fora do contrato, `kind` não suportado): enviada explicitamente para `wager-transactions-dlq.fifo` com o motivo no atributo `failureReason`, e apagada da fila principal.
+- **Limite de tentativas:** mensagens com falha transitória persistente vão para a DLQ pela `RedrivePolicy` após 5 recebimentos.
+- **Desligamento gracioso:** no `SIGTERM`, a mensagem em processamento é concluída; as já recebidas e ainda não iniciadas voltam imediatamente para a fila (visibilidade 0).
+
+### Saída: Transactional Outbox
+
+- **Eventos gravados na mesma transação:** os eventos de integração vão para `outbox_messages` junto com a aposta, o lançamento e o saldo. Ou tudo é confirmado junto, ou nada é; nenhum evento é publicado antes do commit.
 - **Eventos:** classe abstrata `IntegrationEvent` com o envelope (`eventId`, `eventType`, `aggregateId`, `correlationId`, `causationId`, `occurredAt`, `version`, `data`) e uma subclasse por evento, com tipo e versão definidos na própria classe. `data` carrega `MoneyProps` (texto), nunca a instância de `Money`.
   - `WagerTransactionProcessed`: toda transação aplicada, inclusive `LOSS`.
   - `WagerTransactionRejected`: transação rejeitada por regra de negócio.
   - `WalletBalanceChanged`: só quando há lançamento no ledger, ou seja, quando o saldo muda.
 - **Relay com `FOR UPDATE SKIP LOCKED`:** cada publicador pega um lote de eventos pendentes, trancando as linhas e pulando as que outro publicador já pegou. Vários publicadores dividem o trabalho sem esperar uns pelos outros.
-- **Entrega at-least-once:** se um publicador enviar o evento e morrer antes de marcá-lo como publicado, outro o enviará de novo. O consumidor deduplica pelo `eventId`. A fila de eventos é FIFO, com `MessageGroupId` igual ao agregado (ordem por carteira ou transação) e `MessageDeduplicationId` igual ao `eventId`, como otimização.
+- **Entrega at-least-once:** se um publicador enviar o evento e morrer antes de marcá-lo como publicado, outro o enviará de novo. O consumidor deduplica pelo `eventId`. A fila de eventos `wallet-events.fifo` usa `MessageGroupId` igual ao agregado (ordem por carteira ou transação) e `MessageDeduplicationId` igual ao `eventId`, como otimização.
 - **Backoff exponencial:** falha na publicação mantém o evento pendente e agenda a próxima tentativa (1 s, 2 s, 4 s... até 5 minutos), registrada em `attempts` e `next_attempt_at`.
 - **Desligamento gracioso:** no `SIGTERM`, o worker conclui o lote em andamento antes que a conexão com o banco seja fechada.
 
 ## Testes
 
 - **Unitários** (`bun run test`): domínio puro, sem banco nem framework.
-- **Integração** (`bun run test:integration`): contra PostgreSQL real, num banco dedicado (`wallet_test`), criado automaticamente na primeira inicialização do container. Os testes não interferem no banco de desenvolvimento nem no worker da aplicação em execução.
-- Cenários de concorrência com paralelismo real: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger e que os eventos da outbox são gravados exatamente uma vez.
-- Cenários da outbox: dois relays concorrentes publicando cada evento exatamente uma vez, eventos deixados por um processo que morreu após o commit e nova tentativa agendada após falha de publicação.
+- **Integração** (`bun run test:integration`): contra PostgreSQL real, num banco dedicado (`wallet_test`), criado automaticamente na primeira inicialização do container. Os testes não interferem no banco de desenvolvimento nem nos workers da aplicação em execução.
+- **Concorrência**, com paralelismo real: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger e que os eventos da outbox são gravados exatamente uma vez.
+- **Outbox:** dois relays concorrentes publicando cada evento exatamente uma vez, eventos deixados por um processo que morreu após o commit e nova tentativa agendada após falha de publicação.
+- **Consumidor:** processamento e ack, reentrega após o commit sem novo débito, a mesma mensagem entregue 10 vezes em paralelo, rejeição de negócio confirmada e mensagens malformadas enviadas à DLQ. O handler é testado contra o banco real; a camada que conversa com o SQS foi validada manualmente com `bun run sqs:send`.
 
 ## Autenticação
 
