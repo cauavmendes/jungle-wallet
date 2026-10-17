@@ -99,10 +99,26 @@ Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `cod
 - **Backoff exponencial:** falha na publicação mantém o evento pendente e agenda a próxima tentativa (1 s, 2 s, 4 s... até 5 minutos), registrada em `attempts` e `next_attempt_at`.
 - **Desligamento gracioso:** no `SIGTERM`, o worker conclui o lote em andamento antes que a conexão com o banco seja fechada.
 
+## Observabilidade
+
+- **Health checks** sem autenticação:
+  - `GET /health/live`: o processo está de pé. Não verifica dependências, porque reiniciar a aplicação não resolve uma queda do banco.
+  - `GET /health/ready`: PostgreSQL e SQS alcançáveis, cada verificação com prazo de 2 segundos. Responde 503 com o estado de cada dependência quando alguma está fora, para que o balanceador pare de enviar tráfego sem reiniciar a instância.
+- **Logs estruturados em JSON**, uma linha por evento, com `correlationId`, `messageId`, `transactionId`, `walletId` e `providerId` quando disponíveis. Valores monetários e payloads completos não são registrados.
+- **Métricas no formato Prometheus** em `GET /metrics`:
+  - `wager_transactions_total` por status e entrada (`http` ou `sqs`);
+  - `wager_duplicates_total`: replays por idempotency key e mensagens já registradas na inbox;
+  - `sqs_message_retries_total` e `sqs_dead_lettered_total`;
+  - `wallet_lock_conflicts_total` por motivo (`lock_timeout` ou `version_mismatch`);
+  - `outbox_lag_seconds`: idade do evento não publicado mais antigo, calculada no momento da coleta;
+  - `wager_processing_duration_seconds`: histograma de latência, base para p50, p95 e p99;
+  - métricas padrão do processo (CPU, memória, event loop).
+- **As métricas ficam nas bordas** (controller, handler da fila, consumidor e filtro de erros), e não no caso de uso: a regra de negócio não depende da monitoração.
+
 ## Testes
 
 - **Unitários** (`bun run test`): domínio puro, sem banco nem framework.
-- **Integração** (`bun run test:integration`): contra PostgreSQL real, num banco dedicado (`wallet_test`), criado automaticamente na primeira inicialização do container. Os testes não interferem no banco de desenvolvimento nem nos workers da aplicação em execução.
+- **Integração** (`bun run test:integration`): contra PostgreSQL real, num banco dedicado (`wallet_test`), criado automaticamente na primeira inicialização do container. Os testes não interferem no banco de desenvolvimento nem nos workers da aplicação em execução. Os logs do Nest são silenciados durante os testes.
 - **Concorrência**, com paralelismo real: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger e que os eventos da outbox são gravados exatamente uma vez.
 - **Outbox:** dois relays concorrentes publicando cada evento exatamente uma vez, eventos deixados por um processo que morreu após o commit e nova tentativa agendada após falha de publicação.
 - **Consumidor:** processamento e ack, reentrega após o commit sem novo débito, a mesma mensagem entregue 10 vezes em paralelo, rejeição de negócio confirmada e mensagens malformadas enviadas à DLQ. O handler é testado contra o banco real; a camada que conversa com o SQS foi validada manualmente com `bun run sqs:send`.
