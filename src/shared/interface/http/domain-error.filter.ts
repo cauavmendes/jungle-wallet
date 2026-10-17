@@ -1,10 +1,12 @@
 import {
-  ArgumentsHost,
+  type ArgumentsHost,
   Catch,
-  ExceptionFilter,
+  type ExceptionFilter,
   HttpStatus,
+  Injectable,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { Metrics } from '../../../metrics/metrics';
 import { DomainError } from '../../domain/errors';
 
 const STATUS_BY_CODE: Record<string, number> = {
@@ -21,12 +23,25 @@ const STATUS_BY_CODE: Record<string, number> = {
   WALLET_LOCK_TIMEOUT: HttpStatus.SERVICE_UNAVAILABLE,
 };
 
+const LOCK_CONFLICT_REASONS: Record<string, string> = {
+  WALLET_LOCK_TIMEOUT: 'lock_timeout',
+  CONCURRENT_WALLET_MODIFICATION: 'version_mismatch',
+};
+
+@Injectable()
 @Catch(DomainError)
 export class DomainErrorFilter implements ExceptionFilter {
+  constructor(private readonly metrics: Metrics) {}
+
   catch(error: DomainError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     const status =
       STATUS_BY_CODE[error.code] ?? HttpStatus.UNPROCESSABLE_ENTITY;
+    const lockConflictReason = LOCK_CONFLICT_REASONS[error.code];
+
+    if (lockConflictReason) {
+      this.metrics.lockConflictsTotal.inc({ reason: lockConflictReason });
+    }
 
     response.status(status).json({
       error: { code: error.code, message: error.message },
