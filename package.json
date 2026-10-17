@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "typecheck": "tsc --noEmit",
     "db:migrate": "bun src/infrastructure/database/migrate.ts",
     "db:rollback": "bun src/infrastructure/database/rollback.ts",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -16,11 +17,12 @@
     "start:prod": "bun src/main.ts",
     "lint": "oxlint --type-aware src/ test/",
     "test": "bun test src",
-    "test:integration": "bun test test/integration",
+    "test:integration": "DATABASE_URL=postgresql://wallet:wallet@localhost:5432/wallet_test bun test test/integration",
     "test:watch": "bun test src --watch",
     "test:cov": "bun test src --coverage"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.1152.0",
     "@mikro-orm/core": "^7.2.5",
     "@mikro-orm/migrations": "^7.2.5",
     "@mikro-orm/nestjs": "^7.1.0",

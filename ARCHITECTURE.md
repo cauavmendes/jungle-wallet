@@ -52,7 +52,7 @@ Este documento registra as decisões técnicas, os trade-offs e as limitações 
 | Recurso não encontrado                | 404    | `WALLET_NOT_FOUND`                                            |
 | Conflito com o estado existente       | 409    | `WALLET_ALREADY_EXISTS`, `IDEMPOTENCY_CONFLICT`               |
 | Regra de negócio recusada             | 422    | `INSUFFICIENT_FUNDS`, `WALLET_PLAYER_MISMATCH`                |
-| Falha transitória, pode reenviar      | 503    | `CONCURRENT_WALLET_MODIFICATION`                              |
+| Falha transitória, pode reenviar      | 503    | `CONCURRENT_WALLET_MODIFICATION`, `WALLET_LOCK_TIMEOUT`       |
 
 Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `code` é estável e legível por máquina, para o provedor decidir se reenvia, corrige ou desiste sem interpretar texto.
 
@@ -62,7 +62,6 @@ Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `cod
 - **Lock pessimista em vez de otimista:** numa carteira muito disputada, o lock otimista geraria falhas e retries em cascata. O lock pessimista troca isso por uma espera curta, restrita à mesma carteira.
 - **Verificação de versão como defesa extra:** o `UPDATE` do saldo inclui `WHERE version = :versaoEsperada`. Com o lock, a condição sempre é satisfeita; se algum dia não for, a transação inteira é desfeita (`CONCURRENT_WALLET_MODIFICATION`, 503) em vez de perder uma atualização.
 - **O lock vive no banco**, então a garantia vale igualmente para uma ou várias instâncias da aplicação.
-- Testes de integração em `test/integration/` provam os cenários com paralelismo real contra o PostgreSQL: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger.
 - **`lock_timeout` de 5 segundos:** se o lock da carteira não for obtido nesse prazo, a requisição falha com `WALLET_LOCK_TIMEOUT` (503) em vez de esperar indefinidamente, sinalizando ao provedor que pode reenviar.
 
 ## Idempotência
@@ -74,9 +73,24 @@ Toda resposta de erro tem o formato `{ "error": { "code", "message" } }`. O `cod
 - **Mesma key e hash diferente:** conflito (`IDEMPOTENCY_CONFLICT`, 409), nunca replay.
 - **Status HTTP do processamento:** 201 para transação nova processada, 200 para replay e 422 para rejeição por regra de negócio. A rejeição é gravada e auditável, e o replay de uma rejeição devolve o mesmo 422.
 
-## Mensageria (inbox e outbox)
+## Mensageria (outbox)
 
-_A definir._
+- **Transactional Outbox:** os eventos de integração são gravados em `outbox_messages` na mesma transação SQL da aposta, do lançamento e do saldo. Ou tudo é confirmado junto, ou nada é; nenhum evento é publicado antes do commit.
+- **Eventos:** classe abstrata `IntegrationEvent` com o envelope (`eventId`, `eventType`, `aggregateId`, `correlationId`, `causationId`, `occurredAt`, `version`, `data`) e uma subclasse por evento, com tipo e versão definidos na própria classe. `data` carrega `MoneyProps` (texto), nunca a instância de `Money`.
+  - `WagerTransactionProcessed`: toda transação aplicada, inclusive `LOSS`.
+  - `WagerTransactionRejected`: transação rejeitada por regra de negócio.
+  - `WalletBalanceChanged`: só quando há lançamento no ledger, ou seja, quando o saldo muda.
+- **Relay com `FOR UPDATE SKIP LOCKED`:** cada publicador pega um lote de eventos pendentes, trancando as linhas e pulando as que outro publicador já pegou. Vários publicadores dividem o trabalho sem esperar uns pelos outros.
+- **Entrega at-least-once:** se um publicador enviar o evento e morrer antes de marcá-lo como publicado, outro o enviará de novo. O consumidor deduplica pelo `eventId`. A fila de eventos é FIFO, com `MessageGroupId` igual ao agregado (ordem por carteira ou transação) e `MessageDeduplicationId` igual ao `eventId`, como otimização.
+- **Backoff exponencial:** falha na publicação mantém o evento pendente e agenda a próxima tentativa (1 s, 2 s, 4 s... até 5 minutos), registrada em `attempts` e `next_attempt_at`.
+- **Desligamento gracioso:** no `SIGTERM`, o worker conclui o lote em andamento antes que a conexão com o banco seja fechada.
+
+## Testes
+
+- **Unitários** (`bun run test`): domínio puro, sem banco nem framework.
+- **Integração** (`bun run test:integration`): contra PostgreSQL real, num banco dedicado (`wallet_test`), criado automaticamente na primeira inicialização do container. Os testes não interferem no banco de desenvolvimento nem no worker da aplicação em execução.
+- Cenários de concorrência com paralelismo real: a mesma aposta 50 vezes em paralelo, duas apostas de 80,00 com saldo de 100,00, 20 apostas disputando a mesma carteira e carteiras distintas em paralelo. Todos verificam que o saldo guardado é igual ao saldo reconstruído pelo ledger e que os eventos da outbox são gravados exatamente uma vez.
+- Cenários da outbox: dois relays concorrentes publicando cada evento exatamente uma vez, eventos deixados por um processo que morreu após o commit e nova tentativa agendada após falha de publicação.
 
 ## Autenticação
 

@@ -1,3 +1,4 @@
+import type { IntegrationEvent } from '../../shared/application/integration-event';
 import type { Money } from '../../shared/domain/money';
 import type { Wallet } from '../../wallet/domain/wallet';
 import type { WalletLedgerEntry } from '../../wallet/domain/wallet-ledger-entry';
@@ -15,6 +16,7 @@ export interface WagerOutcome {
   wallet: Wallet;
   previousVersion: number;
   ledgerEntry: WalletLedgerEntry | undefined;
+  events: IntegrationEvent<unknown>[];
 }
 
 export interface WalletSession {

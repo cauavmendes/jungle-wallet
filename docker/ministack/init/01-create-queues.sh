@@ -28,4 +28,8 @@ aws_sqs create-queue \
   --queue-name wager-transactions.fifo \
   --attributes file:///tmp/main-queue.json
 
+aws_sqs create-queue \
+  --queue-name wallet-events.fifo \
+  --attributes FifoQueue=true
+
 echo "SQS queues created"

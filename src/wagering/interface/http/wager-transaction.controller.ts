@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -8,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { MoneyProps } from '../../../shared/domain/money';
+import { isNonEmptyString } from '../../../shared/interface/http/validation';
 import {
   type ProcessWagerResult,
   ProcessWagerTransactionUseCase,
@@ -30,11 +32,17 @@ export class WagerTransactionController {
   @Post()
   async process(
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Headers('x-correlation-id') correlationId: string | undefined,
     @Body() body: unknown,
     @Res({ passthrough: true }) response: Response,
   ): Promise<ProcessWagerResponse> {
     const command = parseProcessWagerRequest(idempotencyKey, body);
-    const result = await this.processWager.execute(command);
+    const result = await this.processWager.execute({
+      ...command,
+      correlationId: isNonEmptyString(correlationId)
+        ? correlationId
+        : randomUUID(),
+    });
 
     response.status(statusFor(result));
 
