@@ -1,12 +1,12 @@
-import { Money } from '../../../shared/domain/money';
-import { InvalidRequestError } from '../../../shared/interface/http/invalid-request.error';
+import { Money } from '../../shared/domain/money';
+import { InvalidRequestError } from '../../shared/interface/http/invalid-request.error';
 import {
   isNonEmptyString,
   isRecord,
   isUuid,
-} from '../../../shared/interface/http/validation';
-import type { ProcessWagerCommand } from '../../application/process-wager-transaction.use-case';
-import { WagerTransactionKind } from '../../domain/wager-transaction';
+} from '../../shared/interface/http/validation';
+import type { ProcessWagerCommand } from '../application/process-wager-transaction.use-case';
+import { WagerTransactionKind } from '../domain/wager-transaction';
 
 const SUBMITTABLE_KINDS = new Set<string>([
   WagerTransactionKind.Bet,
