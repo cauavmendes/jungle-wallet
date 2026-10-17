@@ -17,7 +17,7 @@
     "start:prod": "bun src/main.ts",
     "lint": "oxlint --type-aware src/ test/",
     "test": "bun test src",
-    "test:integration": "bun test test/integration",
+    "test:integration": "DATABASE_URL=postgresql://wallet:wallet@localhost:5432/wallet_test bun test test/integration",
     "test:watch": "bun test src --watch",
     "test:cov": "bun test src --coverage"
   },
