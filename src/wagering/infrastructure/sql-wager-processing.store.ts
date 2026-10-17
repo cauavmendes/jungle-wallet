@@ -6,7 +6,6 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 import type { InboxMessage } from '../../inbox/domain/inbox-message';
 import type { IntegrationEvent } from '../../shared/application/integration-event';
-import { Money } from '../../shared/domain/money';
 import type { Wallet } from '../../wallet/domain/wallet';
 import type { WalletLedgerEntry } from '../../wallet/domain/wallet-ledger-entry';
 import {
@@ -20,39 +19,16 @@ import type {
   WagerProcessingStore,
   WalletSession,
 } from '../application/wager-processing.store';
-import {
-  type FailureCode,
-  WagerTransaction,
-  type WagerTransactionKind,
-  type WagerTransactionStatus,
-} from '../domain/wager-transaction';
+import type { WagerTransaction } from '../domain/wager-transaction';
 import {
   ConcurrentWalletModificationError,
   DuplicateTransactionError,
   WalletLockTimeoutError,
 } from '../domain/wager.errors';
-
-interface WagerTransactionRow {
-  id: string;
-  provider_id: string;
-  external_transaction_id: string;
-  idempotency_key: string;
-  payload_hash: string;
-  wallet_id: string;
-  player_id: string;
-  currency: string;
-  round_id: string | null;
-  game_id: string | null;
-  kind: string;
-  amount_cents: string;
-  reference_external_transaction_id: string | null;
-  reference_transaction_id: string | null;
-  status: string;
-  failure_code: string | null;
-  created_at: Date;
-  processed_at: Date | null;
-  balance_after_cents: string | null;
-}
+import {
+  toStoredTransaction,
+  type WagerTransactionRow,
+} from './wager-transaction.row';
 
 @Injectable()
 export class SqlWagerProcessingStore implements WagerProcessingStore {
@@ -260,33 +236,4 @@ class SqlWalletSession implements WalletSession {
       },
     );
   }
-}
-
-function toStoredTransaction(row: WagerTransactionRow): StoredWagerTransaction {
-  return {
-    transaction: WagerTransaction.rehydrate({
-      id: row.id,
-      providerId: row.provider_id,
-      externalTransactionId: row.external_transaction_id,
-      idempotencyKey: row.idempotency_key,
-      payloadHash: row.payload_hash,
-      walletId: row.wallet_id,
-      playerId: row.player_id,
-      roundId: row.round_id ?? undefined,
-      gameId: row.game_id ?? undefined,
-      kind: row.kind as WagerTransactionKind,
-      money: Money.fromCents(BigInt(row.amount_cents), row.currency),
-      referenceExternalTransactionId:
-        row.reference_external_transaction_id ?? undefined,
-      createdAt: row.created_at,
-      status: row.status as WagerTransactionStatus,
-      referenceTransactionId: row.reference_transaction_id ?? undefined,
-      failureCode: (row.failure_code ?? undefined) as FailureCode | undefined,
-      processedAt: row.processed_at ?? undefined,
-    }),
-    balanceAfter:
-      row.balance_after_cents === null
-        ? undefined
-        : Money.fromCents(BigInt(row.balance_after_cents), row.currency),
-  };
 }

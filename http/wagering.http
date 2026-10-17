@@ -96,3 +96,9 @@ Content-Type: application/json
   "kind": "BET",
   "money": { "amount": "5.00", "currency": "BRL" }
 }
+
+###
+GET {{baseUrl}}/providers/provider-a/wagering/transactions/bet-30
+
+###
+GET {{baseUrl}}/providers/provider-a/wagering/transactions/nao-existe

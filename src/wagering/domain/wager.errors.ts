@@ -31,3 +31,7 @@ export class ConcurrentWalletModificationError extends DomainError {
 export class WalletLockTimeoutError extends DomainError {
   readonly code = 'WALLET_LOCK_TIMEOUT';
 }
+
+export class WagerTransactionNotFoundError extends DomainError {
+  readonly code = 'WAGER_TRANSACTION_NOT_FOUND';
+}
