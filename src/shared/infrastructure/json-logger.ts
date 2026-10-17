@@ -29,18 +29,30 @@ export class JsonLogger implements LoggerService {
 
   private write(level: LogLevel, message: unknown, params: unknown[]): void {
     const context = params.at(-1);
-    const fields =
-      typeof message === 'object' && message !== null
-        ? message
-        : { message: String(message) };
 
     process.stdout.write(
       `${JSON.stringify({
         level,
         time: new Date().toISOString(),
         context: typeof context === 'string' ? context : undefined,
-        ...fields,
+        ...toFields(message),
       })}\n`,
     );
   }
+}
+
+function toFields(message: unknown): Record<string, unknown> {
+  if (message instanceof Error) {
+    return {
+      message: message.message,
+      error: message.name,
+      stack: message.stack,
+    };
+  }
+
+  if (typeof message === 'object' && message !== null) {
+    return { ...message };
+  }
+
+  return { message: String(message) };
 }
