@@ -130,4 +130,22 @@ Não implementada, conforme permitido pelo desafio (seção 2). Desenho adotado:
 
 ## Limitações conhecidas
 
-_A definir ao final._
+### Não implementado
+
+- **`REFUND`, `ROLLBACK` e `PENDING_REFERENCE`**: a API e o consumidor recusam esses tipos com `UNSUPPORTED_TRANSACTION_KIND` (400 na API, DLQ na fila). O schema e o domínio já preparam a extensão: `CHECK` exigindo referência, índice único parcial para reversão única por tipo, coluna `reference_transaction_id` e os estados `PENDING_REFERENCE` e as transições correspondentes na entidade `WagerTransaction`. Faltam a regra de aplicação de cada reversão e o worker que reprocessa transações aguardando referência.
+- **Autenticação**: ver a seção Autenticação.
+- **Consumidor dos eventos de `wallet-events.fifo`**: os eventos são publicados, mas nenhum serviço interno os consome. A deduplicação pelo `eventId` é responsabilidade de quem consumir.
+
+### Trade-offs aceitos
+
+- **O relay da outbox mantém a transação aberta durante a chamada ao SQS.** Com lotes de 10 é aceitável; em alto volume, a alternativa é reservar os eventos com um prazo (`locked_until`) e publicar fora da transação.
+- **O consumidor SQS processa uma mensagem por vez.** É simples e seguro, mas limita a vazão. A evolução seria processar grupos (`MessageGroupId`) diferentes em paralelo, mantendo a ordem dentro de cada grupo.
+- **Ordem dentro de um lote:** se uma mensagem de um grupo volta para a fila, as seguintes do mesmo lote continuam sendo processadas. As operações são idempotentes e o sistema tolera entrega fora de ordem, mas a ordem original daquele grupo pode se inverter.
+- **Configuração lida diretamente de `process.env`**, com valores padrão para o ambiente local e sem validação na subida. Em produção, um módulo de configuração validado evitaria subir a aplicação com uma variável faltando.
+- **Métricas por instância**: cada processo expõe os próprios contadores. É o modelo usual do Prometheus, que coleta de cada instância e agrega.
+- **O cursor do ledger é opaco, mas não secreto**: é o `sequence` em base64url. Não carrega informação sensível, apenas a posição no ledger.
+
+### Validação
+
+- A camada que conversa com o SQS (recebimento, ack, visibilidade, envio à DLQ) foi validada manualmente com `bun run sqs:send`; a lógica de decisão (`WagerMessageHandler`) tem testes automatizados contra o banco real.
+- Os testes de integração exigem o Docker no ar e usam o banco `wallet_test`.
